@@ -31,19 +31,19 @@
   } from '@lucide/svelte';
   import { LinkedinIcon as Linkedin } from '$lib/components/icons';
   import { page } from '$app/stores';
-  import {
-    SearchInput,
-    SelectFilter,
-    DateRangeFilter,
-    TagFilter
-  } from '$lib/components/ui/filter';
+  import { SearchInput, SelectFilter, DateRangeFilter, TagFilter } from '$lib/components/ui/filter';
   import { Pagination } from '$lib/components/ui/pagination';
   import { Button } from '$lib/components/ui/button/index.js';
   import { PageHeader, FilterStrip, ViewTabs, FilterPill } from '$lib/components/layout';
   import { INDUSTRIES, COUNTRIES } from '$lib/constants/lead-choices.js';
   import { CURRENCY_CODES } from '$lib/constants/filters.js';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-  import { formatRelativeDate, formatDate, getNameInitials, getInitials } from '$lib/utils/formatting.js';
+  import {
+    formatRelativeDate,
+    formatDate,
+    getNameInitials,
+    getInitials
+  } from '$lib/utils/formatting.js';
   import {
     leadStatusOptions,
     leadRatingOptions,
@@ -642,10 +642,7 @@
   const initialAction = initialUrlParams.get('action');
   const initialLead = initialViewId
     ? untrack(
-        () =>
-          (data.leads || []).find(
-            (/** @type {any} */ l) => l.id === initialViewId
-          ) || null
+        () => (data.leads || []).find((/** @type {any} */ l) => l.id === initialViewId) || null
       )
     : null;
 
@@ -974,8 +971,10 @@
    * @param {string} leadId
    * @param {string} newStatus
    * @param {string} _columnId
+   * @param {string | null} aboveLeadId
+   * @param {string | null} belowLeadId
    */
-  async function handleKanbanStatusChange(leadId, newStatus, _columnId) {
+  async function handleKanbanStatusChange(leadId, newStatus, _columnId, aboveLeadId, belowLeadId) {
     // Convert column ID (status) to proper format
     // Column IDs are: "assigned", "in process", "recycled", "closed"
     const status = newStatus;
@@ -983,6 +982,8 @@
     // Populate form and submit
     kanbanFormState.leadId = leadId;
     kanbanFormState.status = status;
+    kanbanFormState.aboveLeadId = aboveLeadId || '';
+    kanbanFormState.belowLeadId = belowLeadId || '';
 
     await tick();
     updateStatusForm.requestSubmit();
@@ -1255,7 +1256,9 @@
   // Kanban form state (for drag-drop status updates)
   let kanbanFormState = $state({
     leadId: '',
-    status: ''
+    status: '',
+    aboveLeadId: '',
+    belowLeadId: ''
   });
   // Form data state
   let formState = $state({
@@ -1496,286 +1499,282 @@
   class:overflow-hidden={viewMode === 'kanban'}
 >
   <PageHeader
-  title="Leads"
-  subtitle="{viewMode === 'kanban'
-    ? totalLeadCount
-    : filteredLeads.length} of {totalLeadCount} leads"
->
-  {#snippet actions()}
-    <div class="flex items-center gap-2">
-      <!-- View Toggle -->
-      <ViewToggle view={viewMode} onchange={setViewMode} />
+    title="Leads"
+    subtitle="{viewMode === 'kanban'
+      ? totalLeadCount
+      : filteredLeads.length} of {totalLeadCount} leads"
+  >
+    {#snippet actions()}
+      <div class="flex items-center gap-2">
+        <!-- View Toggle -->
+        <ViewToggle view={viewMode} onchange={setViewMode} />
 
-      <div class="mx-1 h-6 w-px bg-[var(--border-default)]"></div>
+        <div class="mx-1 h-6 w-px bg-[var(--border-default)]"></div>
 
-      <!-- Status Filter Chips - Using design system tokens -->
-      <div class="flex gap-1">
-        <button
-          type="button"
-          onclick={() => (statusChipFilter = 'ALL')}
-          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
-          'ALL'
-            ? 'bg-[var(--text-primary)] text-[var(--surface-default)]'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
-        >
-          All
-          <span
-            class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'ALL'
-              ? 'bg-[var(--text-secondary)] text-[var(--surface-default)]'
-              : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
-          >
-            {totalLeadCount}
-          </span>
-        </button>
-        <button
-          type="button"
-          onclick={() => (statusChipFilter = 'open')}
-          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
-          'open'
-            ? 'bg-[var(--color-primary-default)] text-white'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
-        >
-          Open
-          <span
-            class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'open'
-              ? 'bg-[var(--color-primary-hover)] text-white/90'
-              : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
-          >
-            {openCount}
-          </span>
-        </button>
-        <button
-          type="button"
-          onclick={() => (statusChipFilter = 'lost')}
-          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
-          'lost'
-            ? 'bg-[var(--stage-lost)] text-white'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
-        >
-          Lost
-          <span
-            class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'lost'
-              ? 'bg-[var(--stage-lost)]/80 text-white/90'
-              : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
-          >
-            {lostCount}
-          </span>
-        </button>
-      </div>
-
-      <div class="mx-1 h-6 w-px bg-[var(--border-default)]"></div>
-
-      <!-- Column Visibility (only for table view) -->
-      {#if viewMode === 'table'}
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            {#snippet child({ props })}
-              <Button {...props} variant="outline" size="sm" class="gap-2">
-                <Eye class="h-4 w-4" />
-                Columns
-                {#if visibleColumns.length < columns.length}
-                  <span
-                    class="rounded-full bg-[var(--color-primary-light)] px-1.5 py-0.5 text-xs font-medium text-[var(--color-primary-default)] dark:bg-[var(--color-primary-default)]/15"
-                  >
-                    {visibleColumns.length}/{columns.length}
-                  </span>
-                {/if}
-              </Button>
-            {/snippet}
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content align="end" class="w-48">
-            <DropdownMenu.Label>Toggle columns</DropdownMenu.Label>
-            <DropdownMenu.Separator />
-            {#each columns as column (column.key)}
-              <DropdownMenu.CheckboxItem
-                class=""
-                checked={visibleColumns.includes(column.key)}
-                disabled={column.canHide === false}
-                onCheckedChange={() => toggleColumn(column.key)}
-              >
-                {column.label}
-              </DropdownMenu.CheckboxItem>
-            {/each}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      {/if}
-
-      <Button onclick={openCreate}>
-        <Plus class="mr-2 h-4 w-4" />
-        New Lead
-      </Button>
-    </div>
-  {/snippet}
-  {#snippet tabs()}
-    <ViewTabs views={[{ id: 'all', label: 'All', count: totalLeadCount }]} active="all" />
-  {/snippet}
-</PageHeader>
-
-<div
-  class="flex flex-1 flex-col"
-  class:min-h-0={viewMode === 'kanban'}
->
-  <FilterStrip>
-    <SearchInput
-      value={filters.search}
-      placeholder="Search leads..."
-      showLabel={false}
-      onchange={(value) => updateFilters({ ...filters, search: value })}
-      class="w-64"
-    />
-    <SelectFilter
-      label="Source"
-      options={filterOptions.sources}
-      value={filters.source || 'ALL'}
-      onchange={(value) => updateFilters({ ...filters, source: value })}
-      class="w-40"
-    />
-    <SelectFilter
-      label="Rating"
-      options={filterOptions.ratings}
-      value={filters.rating || 'ALL'}
-      onchange={(value) => updateFilters({ ...filters, rating: value })}
-      class="w-32"
-    />
-    <DateRangeFilter
-      label="Created"
-      startDate={filters.created_at_gte}
-      endDate={filters.created_at_lte}
-      onchange={(start, end) =>
-        updateFilters({ ...filters, created_at_gte: start, created_at_lte: end })}
-      class="w-56"
-    />
-    <TagFilter
-      tags={data.tags || []}
-      value={filters.tags}
-      onchange={(ids) => updateFilters({ ...filters, tags: ids })}
-    />
-    {#if activeFiltersCount > 0}
-      <FilterPill label="Clear all" dashed onclick={clearFilters} />
-    {/if}
-    {#snippet meta()}
-      <span>{filteredLeads.length} of {pagination.total} leads</span>
-    {/snippet}
-  </FilterStrip>
-
-  <!-- Content: Table or Kanban -->
-  {#if viewMode === 'kanban'}
-    <!-- Kanban View -->
-    <div class="flex min-h-0 flex-1 flex-col">
-      <LeadKanban
-        data={kanbanData}
-        loading={!kanbanData}
-        onStatusChange={handleKanbanStatusChange}
-        onCardClick={(lead) => openLead(lead, true)}
-      />
-    </div>
-  {:else}
-    <!-- Table View -->
-    {#if filteredLeads.length === 0}
-      <div class="flex flex-col items-center justify-center py-16 text-center">
-        <div
-          class="mb-4 flex size-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-sunken)]"
-        >
-          <User class="size-8 text-[var(--text-tertiary)]" />
-        </div>
-        <h3 class="text-lg font-medium text-[var(--text-primary)]">No leads found</h3>
-        <p class="mt-1 text-sm text-[var(--text-secondary)]">Create a new lead to get started</p>
-      </div>
-    {:else}
-      <!-- Desktop Table using CrmTable -->
-      <div class="hidden md:block">
-        <CrmTable
-          data={filteredLeads}
-          {columns}
-          bind:visibleColumns
-          bind:activeRowId
-          onRowChange={handleRowChange}
-          onRowClick={(row) => openLead(row)}
-        >
-          {#snippet emptyState()}
-            <div class="flex flex-col items-center justify-center py-16 text-center">
-              <div
-                class="mb-4 flex size-12 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--surface-sunken)]"
-              >
-                <User class="size-6 text-[var(--text-tertiary)]" />
-              </div>
-              <h3 class="text-lg font-medium text-[var(--text-primary)]">No leads found</h3>
-            </div>
-          {/snippet}
-        </CrmTable>
-      </div>
-
-      <!-- Mobile Card View -->
-      <div class="divide-y divide-[var(--border-default)]/50 md:hidden">
-        {#each filteredLeads as lead (lead.id)}
+        <!-- Status Filter Chips - Using design system tokens -->
+        <div class="flex gap-1">
           <button
             type="button"
-            class="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--color-primary-light)] dark:hover:bg-[var(--color-primary-default)]/5"
-            onclick={() => openLead(lead)}
+            onclick={() => (statusChipFilter = 'ALL')}
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
+            'ALL'
+              ? 'bg-[var(--text-primary)] text-[var(--surface-default)]'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
           >
-            <div class="min-w-0 flex-1">
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <p class="text-sm font-medium text-[var(--text-primary)]">
-                    {getFullName(lead)}
-                  </p>
-                  {#if lead.company}
-                    <p class="text-sm text-[var(--text-secondary)]">
-                      {typeof lead.company === 'object' ? lead.company.name : lead.company}
-                    </p>
+            All
+            <span
+              class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'ALL'
+                ? 'bg-[var(--text-secondary)] text-[var(--surface-default)]'
+                : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            >
+              {totalLeadCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            onclick={() => (statusChipFilter = 'open')}
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
+            'open'
+              ? 'bg-[var(--color-primary-default)] text-white'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
+          >
+            Open
+            <span
+              class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'open'
+                ? 'bg-[var(--color-primary-hover)] text-white/90'
+                : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            >
+              {openCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            onclick={() => (statusChipFilter = 'lost')}
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
+            'lost'
+              ? 'bg-[var(--stage-lost)] text-white'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
+          >
+            Lost
+            <span
+              class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'lost'
+                ? 'bg-[var(--stage-lost)]/80 text-white/90'
+                : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            >
+              {lostCount}
+            </span>
+          </button>
+        </div>
+
+        <div class="mx-1 h-6 w-px bg-[var(--border-default)]"></div>
+
+        <!-- Column Visibility (only for table view) -->
+        {#if viewMode === 'table'}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              {#snippet child({ props })}
+                <Button {...props} variant="outline" size="sm" class="gap-2">
+                  <Eye class="h-4 w-4" />
+                  Columns
+                  {#if visibleColumns.length < columns.length}
+                    <span
+                      class="rounded-full bg-[var(--color-primary-light)] px-1.5 py-0.5 text-xs font-medium text-[var(--color-primary-default)] dark:bg-[var(--color-primary-default)]/15"
+                    >
+                      {visibleColumns.length}/{columns.length}
+                    </span>
                   {/if}
-                </div>
-                <span
-                  class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {getOptionStyle(
-                    lead.status,
-                    leadStatusOptions
-                  )}"
+                </Button>
+              {/snippet}
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" class="w-48">
+              <DropdownMenu.Label>Toggle columns</DropdownMenu.Label>
+              <DropdownMenu.Separator />
+              {#each columns as column (column.key)}
+                <DropdownMenu.CheckboxItem
+                  class=""
+                  checked={visibleColumns.includes(column.key)}
+                  disabled={column.canHide === false}
+                  onCheckedChange={() => toggleColumn(column.key)}
                 >
-                  {getOptionLabel(lead.status, leadStatusOptions)}
-                </span>
+                  {column.label}
+                </DropdownMenu.CheckboxItem>
+              {/each}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        {/if}
+
+        <Button onclick={openCreate}>
+          <Plus class="mr-2 h-4 w-4" />
+          New Lead
+        </Button>
+      </div>
+    {/snippet}
+    {#snippet tabs()}
+      <ViewTabs views={[{ id: 'all', label: 'All', count: totalLeadCount }]} active="all" />
+    {/snippet}
+  </PageHeader>
+
+  <div class="flex flex-1 flex-col" class:min-h-0={viewMode === 'kanban'}>
+    <FilterStrip>
+      <SearchInput
+        value={filters.search}
+        placeholder="Search leads..."
+        showLabel={false}
+        onchange={(value) => updateFilters({ ...filters, search: value })}
+        class="w-64"
+      />
+      <SelectFilter
+        label="Source"
+        options={filterOptions.sources}
+        value={filters.source || 'ALL'}
+        onchange={(value) => updateFilters({ ...filters, source: value })}
+        class="w-40"
+      />
+      <SelectFilter
+        label="Rating"
+        options={filterOptions.ratings}
+        value={filters.rating || 'ALL'}
+        onchange={(value) => updateFilters({ ...filters, rating: value })}
+        class="w-32"
+      />
+      <DateRangeFilter
+        label="Created"
+        startDate={filters.created_at_gte}
+        endDate={filters.created_at_lte}
+        onchange={(start, end) =>
+          updateFilters({ ...filters, created_at_gte: start, created_at_lte: end })}
+        class="w-56"
+      />
+      <TagFilter
+        tags={data.tags || []}
+        value={filters.tags}
+        onchange={(ids) => updateFilters({ ...filters, tags: ids })}
+      />
+      {#if activeFiltersCount > 0}
+        <FilterPill label="Clear all" dashed onclick={clearFilters} />
+      {/if}
+      {#snippet meta()}
+        <span>{filteredLeads.length} of {pagination.total} leads</span>
+      {/snippet}
+    </FilterStrip>
+
+    <!-- Content: Table or Kanban -->
+    {#if viewMode === 'kanban'}
+      <!-- Kanban View -->
+      <div class="flex min-h-0 flex-1 flex-col">
+        <LeadKanban
+          data={kanbanData}
+          loading={!kanbanData}
+          onStatusChange={handleKanbanStatusChange}
+          onCardClick={(lead) => openLead(lead, true)}
+        />
+      </div>
+    {:else}
+      <!-- Table View -->
+      {#if filteredLeads.length === 0}
+        <div class="flex flex-col items-center justify-center py-16 text-center">
+          <div
+            class="mb-4 flex size-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-sunken)]"
+          >
+            <User class="size-8 text-[var(--text-tertiary)]" />
+          </div>
+          <h3 class="text-lg font-medium text-[var(--text-primary)]">No leads found</h3>
+          <p class="mt-1 text-sm text-[var(--text-secondary)]">Create a new lead to get started</p>
+        </div>
+      {:else}
+        <!-- Desktop Table using CrmTable -->
+        <div class="hidden md:block">
+          <CrmTable
+            data={filteredLeads}
+            {columns}
+            bind:visibleColumns
+            bind:activeRowId
+            onRowChange={handleRowChange}
+            onRowClick={(row) => openLead(row)}
+          >
+            {#snippet emptyState()}
+              <div class="flex flex-col items-center justify-center py-16 text-center">
+                <div
+                  class="mb-4 flex size-12 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--surface-sunken)]"
+                >
+                  <User class="size-6 text-[var(--text-tertiary)]" />
+                </div>
+                <h3 class="text-lg font-medium text-[var(--text-primary)]">No leads found</h3>
               </div>
-              <div
-                class="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]"
-              >
-                {#if lead.rating}
+            {/snippet}
+          </CrmTable>
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="divide-y divide-[var(--border-default)]/50 md:hidden">
+          {#each filteredLeads as lead (lead.id)}
+            <button
+              type="button"
+              class="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--color-primary-light)] dark:hover:bg-[var(--color-primary-default)]/5"
+              onclick={() => openLead(lead)}
+            >
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <p class="text-sm font-medium text-[var(--text-primary)]">
+                      {getFullName(lead)}
+                    </p>
+                    {#if lead.company}
+                      <p class="text-sm text-[var(--text-secondary)]">
+                        {typeof lead.company === 'object' ? lead.company.name : lead.company}
+                      </p>
+                    {/if}
+                  </div>
                   <span
-                    class="rounded-full px-2 py-0.5 {getOptionStyle(
-                      lead.rating,
-                      leadRatingOptions
+                    class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium {getOptionStyle(
+                      lead.status,
+                      leadStatusOptions
                     )}"
                   >
-                    {getOptionLabel(lead.rating, leadRatingOptions)}
+                    {getOptionLabel(lead.status, leadStatusOptions)}
                   </span>
-                {/if}
-                <span>{formatRelativeDate(lead.createdAt)}</span>
+                </div>
+                <div
+                  class="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]"
+                >
+                  {#if lead.rating}
+                    <span
+                      class="rounded-full px-2 py-0.5 {getOptionStyle(
+                        lead.rating,
+                        leadRatingOptions
+                      )}"
+                    >
+                      {getOptionLabel(lead.rating, leadRatingOptions)}
+                    </span>
+                  {/if}
+                  <span>{formatRelativeDate(lead.createdAt)}</span>
+                </div>
               </div>
-            </div>
+            </button>
+          {/each}
+
+          <!-- Mobile new row button -->
+          <button
+            type="button"
+            onclick={openCreate}
+            class="flex w-full items-center gap-2 px-4 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]"
+          >
+            <Plus class="h-4 w-4" />
+            New
           </button>
-        {/each}
+        </div>
+      {/if}
 
-        <!-- Mobile new row button -->
-        <button
-          type="button"
-          onclick={openCreate}
-          class="flex w-full items-center gap-2 px-4 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]"
-        >
-          <Plus class="h-4 w-4" />
-          New
-        </button>
-      </div>
+      <!-- Pagination (only for table view) -->
+      <Pagination
+        page={pagination.page}
+        limit={pagination.limit}
+        total={pagination.total}
+        onPageChange={handlePageChange}
+        onLimitChange={handleLimitChange}
+      />
     {/if}
-
-    <!-- Pagination (only for table view) -->
-    <Pagination
-      page={pagination.page}
-      limit={pagination.limit}
-      total={pagination.total}
-      onPageChange={handlePageChange}
-      onLimitChange={handleLimitChange}
-    />
-  {/if}
-</div>
-
+  </div>
 </div>
 
 <!-- Lead Drawer -->
@@ -1820,7 +1819,9 @@
 
   {#snippet metaSection()}
     {#if drawerData}
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[color:var(--text-muted)]">
+      <div
+        class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[color:var(--text-muted)]"
+      >
         {#if drawerData.owner}
           <div class="flex items-center gap-1.5">
             <span
@@ -2014,4 +2015,6 @@
 >
   <input type="hidden" name="leadId" bind:value={kanbanFormState.leadId} />
   <input type="hidden" name="status" bind:value={kanbanFormState.status} />
+  <input type="hidden" name="aboveLeadId" bind:value={kanbanFormState.aboveLeadId} />
+  <input type="hidden" name="belowLeadId" bind:value={kanbanFormState.belowLeadId} />
 </form>

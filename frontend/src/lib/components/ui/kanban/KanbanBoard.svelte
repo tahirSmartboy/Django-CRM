@@ -33,7 +33,7 @@
    *   loading?: boolean,
    *   itemName?: string,
    *   itemNamePlural?: string,
-   *   onItemMove: (itemId: string, newStatus: string, columnId: string) => Promise<void>,
+   *   onItemMove: (itemId: string, newStatus: string, columnId: string, aboveId: string | null, belowId: string | null) => Promise<void>,
    *   onCardClick: (item: any) => void,
    *   CardComponent: any,
    *   emptyMessage?: string,
@@ -139,52 +139,72 @@
   /**
    * @param {DragEvent} e
    * @param {string} targetColumnId
+   * @param {{ aboveId: string | null, belowId: string | null }} neighbors
    */
-  async function handleDrop(e, targetColumnId) {
+  async function handleDrop(e, targetColumnId, neighbors) {
     e.preventDefault();
     dragOverColumn = null;
 
-    if (!draggedItem || dragSourceColumn === targetColumnId) {
-      draggedItem = null;
+    if (!draggedItem) {
       dragSourceColumn = null;
       return;
     }
 
     const item = draggedItem;
     const sourceColumnId = dragSourceColumn;
+    const { aboveId, belowId } = neighbors;
 
     draggedItem = null;
     dragSourceColumn = null;
 
     const sourceCol = localColumns.find((c) => c.id === sourceColumnId);
     const targetCol = localColumns.find((c) => c.id === targetColumnId);
+    if (!sourceCol || !targetCol) return;
 
-    if (sourceCol && targetCol) {
-      const itemIndex = sourceCol.items.findIndex((i) => i.id === item.id);
-      if (itemIndex !== -1) {
-        sourceCol.items.splice(itemIndex, 1);
-        sourceCol.item_count--;
-      }
-      targetCol.items.unshift({ ...item, status: targetColumnId });
-      targetCol.item_count++;
-      localColumns = [...localColumns];
+    // Snapshot for rollback
+    const sourceItemsBefore = [...sourceCol.items];
+    const targetItemsBefore = [...targetCol.items];
+    const sourceCountBefore = sourceCol.item_count;
+    const targetCountBefore = targetCol.item_count;
+
+    // Detect no-op: same column AND the dropped position equals current position
+    if (sourceColumnId === targetColumnId) {
+      const currentIdx = sourceCol.items.findIndex((i) => i.id === item.id);
+      const currentAbove = sourceCol.items[currentIdx - 1]?.id ?? null;
+      const currentBelow = sourceCol.items[currentIdx + 1]?.id ?? null;
+      if (aboveId === currentAbove && belowId === currentBelow) return;
     }
 
+    // Optimistic update: remove from source, insert at resolved position in target
+    const srcIdx = sourceCol.items.findIndex((i) => i.id === item.id);
+    if (srcIdx !== -1) {
+      sourceCol.items.splice(srcIdx, 1);
+      sourceCol.item_count--;
+    }
+    let insertIdx;
+    if (belowId) {
+      insertIdx = targetCol.items.findIndex((i) => i.id === belowId);
+      if (insertIdx === -1) insertIdx = targetCol.items.length;
+    } else if (aboveId) {
+      const aboveIdx = targetCol.items.findIndex((i) => i.id === aboveId);
+      insertIdx = aboveIdx === -1 ? targetCol.items.length : aboveIdx + 1;
+    } else {
+      insertIdx = targetCol.items.length;
+    }
+    targetCol.items.splice(insertIdx, 0, { ...item, status: targetColumnId });
+    targetCol.item_count++;
+    localColumns = [...localColumns];
+
     try {
-      await onItemMove(item.id, targetColumnId, targetColumnId);
+      await onItemMove(item.id, targetColumnId, targetColumnId, aboveId, belowId);
     } catch (error) {
       console.error(`Failed to move ${itemName}:`, error);
       toast.error(`Failed to move ${itemName}`);
-      if (sourceCol && targetCol) {
-        const itemIndex = targetCol.items.findIndex((i) => i.id === item.id);
-        if (itemIndex !== -1) {
-          targetCol.items.splice(itemIndex, 1);
-          targetCol.item_count--;
-        }
-        sourceCol.items.unshift(item);
-        sourceCol.item_count++;
-        localColumns = [...localColumns];
-      }
+      sourceCol.items = sourceItemsBefore;
+      targetCol.items = targetItemsBefore;
+      sourceCol.item_count = sourceCountBefore;
+      targetCol.item_count = targetCountBefore;
+      localColumns = [...localColumns];
     }
   }
 
@@ -229,8 +249,12 @@
                 <div class="mt-2 flex items-center justify-between">
                   <div class="skeleton h-3 w-12 rounded"></div>
                   <div class="flex -space-x-1.5">
-                    <div class="skeleton h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#262626]"></div>
-                    <div class="skeleton h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#262626]"></div>
+                    <div
+                      class="skeleton h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#262626]"
+                    ></div>
+                    <div
+                      class="skeleton h-6 w-6 rounded-full ring-2 ring-white dark:ring-[#262626]"
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -263,7 +287,9 @@
         >
           <div class="flex items-center gap-2">
             <TrendingUp class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <span class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <span
+              class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+            >
               Pipeline
             </span>
             <span class="text-sm font-semibold text-gray-800 dark:text-white">
@@ -275,7 +301,9 @@
 
           <div class="flex items-center gap-2">
             <Flame class="h-4 w-4 text-rose-500 dark:text-rose-400" />
-            <span class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <span
+              class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+            >
               Hot
             </span>
             <span class="text-sm font-semibold text-gray-800 dark:text-white">
@@ -287,7 +315,9 @@
 
           <div class="flex items-center gap-2">
             <Users class="h-4 w-4 text-gray-500 dark:text-gray-400" />
-            <span class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <span
+              class="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+            >
               Total {itemNamePlural}
             </span>
             <span class="text-sm font-semibold text-gray-800 dark:text-white">
@@ -305,9 +335,10 @@
             {itemName}
             {CardComponent}
             isDragOver={dragOverColumn === column.id}
+            draggedItemId={draggedItem?.id ?? null}
             onDragOver={(e) => handleDragOver(e, column.id)}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, column.id)}
+            onDrop={(e, neighbors) => handleDrop(e, column.id, neighbors)}
             {onCardClick}
             onCardDragStart={(e, item) => handleDragStart(e, item, column.id)}
             onCardDragEnd={handleDragEnd}

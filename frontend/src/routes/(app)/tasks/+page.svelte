@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms';
   import { invalidateAll, goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { toast } from 'svelte-sonner';
   import {
     Plus,
@@ -38,12 +38,7 @@
   import { CommentSection } from '$lib/components/ui/comment-section';
   import CustomFieldsPanel from '$lib/components/custom-fields/CustomFieldsPanel.svelte';
   import { getCurrentUser } from '$lib/api.js';
-  import {
-    SearchInput,
-    SelectFilter,
-    DateRangeFilter,
-    TagFilter
-  } from '$lib/components/ui/filter';
+  import { SearchInput, SelectFilter, DateRangeFilter, TagFilter } from '$lib/components/ui/filter';
   import { Pagination } from '$lib/components/ui/pagination';
   import { cn } from '$lib/utils.js';
   import { TASK_STATUSES as statuses, PRIORITIES as priorities } from '$lib/constants/filters.js';
@@ -441,8 +436,11 @@
     return filtered;
   });
 
-  // Local data for optimistic updates
-  let localTasks = $state(/** @type {any[]} */ ([]));
+  // Local data for optimistic updates. Initialize synchronously from props so SSR
+  // renders the actual rows instead of flashing "No tasks" until $effect runs on hydration.
+  let localTasks = $state(
+    /** @type {any[]} */ (untrack(() => (data.tasks ? [...data.tasks] : [])))
+  );
 
   $effect(() => {
     localTasks = [...filteredTasks];
@@ -1026,13 +1024,15 @@
    * @param {string} taskId
    * @param {string} newStatus
    * @param {string} _columnId
+   * @param {string | null} aboveTaskId
+   * @param {string | null} belowTaskId
    */
-  async function handleKanbanStatusChange(taskId, newStatus, _columnId) {
+  async function handleKanbanStatusChange(taskId, newStatus, _columnId, aboveTaskId, belowTaskId) {
     kanbanFormState.taskId = taskId;
     kanbanFormState.status = newStatus;
     kanbanFormState.stageId = '';
-    kanbanFormState.aboveTaskId = '';
-    kanbanFormState.belowTaskId = '';
+    kanbanFormState.aboveTaskId = aboveTaskId || '';
+    kanbanFormState.belowTaskId = belowTaskId || '';
     await tick();
     moveTaskForm.requestSubmit();
   }
@@ -1110,246 +1110,244 @@
 </svelte:head>
 
 <div class="flex flex-col">
-<PageHeader title="Tasks" subtitle="{filteredTasks.length} of {tasks.length} tasks">
-  {#snippet actions()}
-    <div class="flex items-center gap-2">
-      <!-- Status Filter Chips -->
-      <div class="flex gap-1">
-        <button
-          type="button"
-          onclick={() => (statusChipFilter = 'ALL')}
-          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
-          'ALL'
-            ? 'bg-[var(--color-primary-default)] text-white'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
-        >
-          All
-          <span
-            class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'ALL'
-              ? 'bg-[var(--color-primary-dark)] text-white/90'
-              : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+  <PageHeader title="Tasks" subtitle="{filteredTasks.length} of {tasks.length} tasks">
+    {#snippet actions()}
+      <div class="flex items-center gap-2">
+        <!-- Status Filter Chips -->
+        <div class="flex gap-1">
+          <button
+            type="button"
+            onclick={() => (statusChipFilter = 'ALL')}
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
+            'ALL'
+              ? 'bg-[var(--color-primary-default)] text-white'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
           >
-            {tasks.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          onclick={() => (statusChipFilter = 'active')}
-          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
-          'active'
-            ? 'bg-[var(--task-due-today)] text-white'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
-        >
-          Active
-          <span
-            class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'active'
-              ? 'bg-black/20 text-white/90'
-              : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            All
+            <span
+              class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'ALL'
+                ? 'bg-[var(--color-primary-dark)] text-white/90'
+                : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            >
+              {tasks.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onclick={() => (statusChipFilter = 'active')}
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
+            'active'
+              ? 'bg-[var(--task-due-today)] text-white'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
           >
-            {activeTaskCount}
-          </span>
-        </button>
-        <button
-          type="button"
-          onclick={() => (statusChipFilter = 'completed')}
-          class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
-          'completed'
-            ? 'bg-[var(--task-completed)] text-white'
-            : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
-        >
-          Completed
-          <span
-            class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'completed'
-              ? 'bg-black/20 text-white/90'
-              : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            Active
+            <span
+              class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'active'
+                ? 'bg-black/20 text-white/90'
+                : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            >
+              {activeTaskCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            onclick={() => (statusChipFilter = 'completed')}
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors {statusChipFilter ===
+            'completed'
+              ? 'bg-[var(--task-completed)] text-white'
+              : 'bg-[var(--surface-sunken)] text-[var(--text-secondary)] hover:bg-[var(--surface-raised)]'}"
           >
-            {completedCount}
-          </span>
-        </button>
-      </div>
-
-      <div class="bg-border mx-1 h-6 w-px"></div>
-
-      <!-- View Toggle -->
-      <div class="border-input bg-background inline-flex rounded-lg border p-1">
-        <Button
-          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-          size="sm"
-          onclick={() => updateViewMode('list')}
-          class="h-8 px-3"
-        >
-          <List class="mr-1.5 h-4 w-4" />
-          List
-        </Button>
-        <Button
-          variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-          size="sm"
-          onclick={() => updateViewMode('kanban')}
-          class="h-8 px-3"
-        >
-          <Columns class="mr-1.5 h-4 w-4" />
-          Board
-        </Button>
-        <Button
-          variant={viewMode === 'calendar' ? 'secondary' : 'ghost'}
-          size="sm"
-          onclick={() => updateViewMode('calendar')}
-          class="h-8 px-3"
-        >
-          <Calendar class="mr-1.5 h-4 w-4" />
-          Calendar
-        </Button>
-      </div>
-
-      {#if viewMode === 'list'}
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            {#snippet child({ props })}
-              <Button {...props} variant="outline" size="sm" class="gap-2">
-                <Eye class="h-4 w-4" />
-                Columns
-                {#if columnCounts.visible < columnCounts.total}
-                  <span
-                    class="rounded-full bg-[var(--color-primary-light)] px-1.5 py-0.5 text-xs font-medium text-[var(--color-primary-default)]"
-                  >
-                    {columnCounts.visible}/{columnCounts.total}
-                  </span>
-                {/if}
-              </Button>
-            {/snippet}
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content align="end" class="w-48">
-            <DropdownMenu.Label>Toggle columns</DropdownMenu.Label>
-            <DropdownMenu.Separator />
-            {#each taskColumns as column (column.key)}
-              <DropdownMenu.CheckboxItem
-                class=""
-                checked={isColumnVisible(column.key)}
-                onCheckedChange={() => toggleColumn(column.key)}
-                disabled={column.canHide === false}
-              >
-                {column.label}
-              </DropdownMenu.CheckboxItem>
-            {/each}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      {/if}
-
-      <Button onclick={addNewTask}>
-        <Plus class="mr-2 h-4 w-4" />
-        New Task
-      </Button>
-    </div>
-  {/snippet}
-  {#snippet tabs()}
-    <ViewTabs views={[{ id: 'all', label: 'All', count: pagination.total }]} active="all" />
-  {/snippet}
-</PageHeader>
-
-<div class="flex-1">
-  <FilterStrip>
-    <SearchInput
-      value={filters.search}
-      onchange={(value) => updateFilters({ ...filters, search: value })}
-      placeholder="Search tasks..."
-    />
-    <SelectFilter
-      label="Priority"
-      options={priorityFilterOptions}
-      value={filters.priority}
-      onchange={(value) => updateFilters({ ...filters, priority: value })}
-    />
-    <DateRangeFilter
-      label="Due Date"
-      startDate={filters.due_date_gte}
-      endDate={filters.due_date_lte}
-      onchange={(start, end) =>
-        updateFilters({ ...filters, due_date_gte: start, due_date_lte: end })}
-    />
-    <TagFilter
-      tags={allTags}
-      value={filters.tags}
-      onchange={(ids) => updateFilters({ ...filters, tags: ids })}
-    />
-    {#if activeFiltersCount > 0}
-      <FilterPill label="Clear all" dashed onclick={clearFilters} />
-    {/if}
-    {#snippet meta()}
-      <span>{filteredTasks.length} of {pagination.total} tasks</span>
-    {/snippet}
-  </FilterStrip>
-  {#if viewMode === 'list'}
-    <CrmTable
-      data={localTasks}
-      columns={taskColumns}
-      bind:visibleColumns
-      bind:activeRowId
-      onRowChange={handleRowChange}
-      onRowClick={handleRowClick}
-    >
-      {#snippet emptyState()}
-        <div class="flex flex-col items-center justify-center py-16 text-center">
-          <div
-            class="mb-4 flex size-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-sunken)]"
-          >
-            <CheckSquare class="size-8 text-[var(--text-tertiary)]" />
-          </div>
-          <h3 class="text-lg font-medium text-[var(--text-primary)]">No tasks found</h3>
-          <p class="mt-1 text-sm text-[var(--text-secondary)]">
-            Try adjusting your filters or create a new task
-          </p>
+            Completed
+            <span
+              class="rounded-full px-1.5 py-0.5 text-xs {statusChipFilter === 'completed'
+                ? 'bg-black/20 text-white/90'
+                : 'bg-[var(--border-default)] text-[var(--text-tertiary)]'}"
+            >
+              {completedCount}
+            </span>
+          </button>
         </div>
-      {/snippet}
-    </CrmTable>
-  {:else if viewMode === 'kanban'}
-    <TaskKanban
-      data={kanbanData}
-      loading={!kanbanData}
-      onStatusChange={handleKanbanStatusChange}
-      onCardClick={handleKanbanCardClick}
-      onAddItem={handleAddCardFromColumn}
-    />
-  {:else}
-    <!-- Calendar View -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <!-- Calendar Section -->
-      <div class="lg:col-span-2">
-        <SectionCard padded={false} class="overflow-hidden">
-          <!-- Calendar Header (domain-specific colored strip) -->
-          <div
-            class="bg-primary flex flex-row items-center justify-between space-y-0 p-4"
+
+        <div class="bg-border mx-1 h-6 w-px"></div>
+
+        <!-- View Toggle -->
+        <div class="border-input bg-background inline-flex rounded-lg border p-1">
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="sm"
+            onclick={() => updateViewMode('list')}
+            class="h-8 px-3"
           >
-            <div class="flex items-center gap-4">
+            <List class="mr-1.5 h-4 w-4" />
+            List
+          </Button>
+          <Button
+            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+            size="sm"
+            onclick={() => updateViewMode('kanban')}
+            class="h-8 px-3"
+          >
+            <Columns class="mr-1.5 h-4 w-4" />
+            Board
+          </Button>
+          <Button
+            variant={viewMode === 'calendar' ? 'secondary' : 'ghost'}
+            size="sm"
+            onclick={() => updateViewMode('calendar')}
+            class="h-8 px-3"
+          >
+            <Calendar class="mr-1.5 h-4 w-4" />
+            Calendar
+          </Button>
+        </div>
+
+        {#if viewMode === 'list'}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              {#snippet child({ props })}
+                <Button {...props} variant="outline" size="sm" class="gap-2">
+                  <Eye class="h-4 w-4" />
+                  Columns
+                  {#if columnCounts.visible < columnCounts.total}
+                    <span
+                      class="rounded-full bg-[var(--color-primary-light)] px-1.5 py-0.5 text-xs font-medium text-[var(--color-primary-default)]"
+                    >
+                      {columnCounts.visible}/{columnCounts.total}
+                    </span>
+                  {/if}
+                </Button>
+              {/snippet}
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" class="w-48">
+              <DropdownMenu.Label>Toggle columns</DropdownMenu.Label>
+              <DropdownMenu.Separator />
+              {#each taskColumns as column (column.key)}
+                <DropdownMenu.CheckboxItem
+                  class=""
+                  checked={isColumnVisible(column.key)}
+                  onCheckedChange={() => toggleColumn(column.key)}
+                  disabled={column.canHide === false}
+                >
+                  {column.label}
+                </DropdownMenu.CheckboxItem>
+              {/each}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        {/if}
+
+        <Button onclick={addNewTask}>
+          <Plus class="mr-2 h-4 w-4" />
+          New Task
+        </Button>
+      </div>
+    {/snippet}
+    {#snippet tabs()}
+      <ViewTabs views={[{ id: 'all', label: 'All', count: pagination.total }]} active="all" />
+    {/snippet}
+  </PageHeader>
+
+  <div class="flex-1">
+    <FilterStrip>
+      <SearchInput
+        value={filters.search}
+        onchange={(value) => updateFilters({ ...filters, search: value })}
+        placeholder="Search tasks..."
+      />
+      <SelectFilter
+        label="Priority"
+        options={priorityFilterOptions}
+        value={filters.priority}
+        onchange={(value) => updateFilters({ ...filters, priority: value })}
+      />
+      <DateRangeFilter
+        label="Due Date"
+        startDate={filters.due_date_gte}
+        endDate={filters.due_date_lte}
+        onchange={(start, end) =>
+          updateFilters({ ...filters, due_date_gte: start, due_date_lte: end })}
+      />
+      <TagFilter
+        tags={allTags}
+        value={filters.tags}
+        onchange={(ids) => updateFilters({ ...filters, tags: ids })}
+      />
+      {#if activeFiltersCount > 0}
+        <FilterPill label="Clear all" dashed onclick={clearFilters} />
+      {/if}
+      {#snippet meta()}
+        <span>{filteredTasks.length} of {pagination.total} tasks</span>
+      {/snippet}
+    </FilterStrip>
+    {#if viewMode === 'list'}
+      <CrmTable
+        data={localTasks}
+        columns={taskColumns}
+        bind:visibleColumns
+        bind:activeRowId
+        onRowChange={handleRowChange}
+        onRowClick={handleRowClick}
+      >
+        {#snippet emptyState()}
+          <div class="flex flex-col items-center justify-center py-16 text-center">
+            <div
+              class="mb-4 flex size-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-sunken)]"
+            >
+              <CheckSquare class="size-8 text-[var(--text-tertiary)]" />
+            </div>
+            <h3 class="text-lg font-medium text-[var(--text-primary)]">No tasks found</h3>
+            <p class="mt-1 text-sm text-[var(--text-secondary)]">
+              Try adjusting your filters or create a new task
+            </p>
+          </div>
+        {/snippet}
+      </CrmTable>
+    {:else if viewMode === 'kanban'}
+      <TaskKanban
+        data={kanbanData}
+        loading={!kanbanData}
+        onStatusChange={handleKanbanStatusChange}
+        onCardClick={handleKanbanCardClick}
+        onAddItem={handleAddCardFromColumn}
+      />
+    {:else}
+      <!-- Calendar View -->
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <!-- Calendar Section -->
+        <div class="lg:col-span-2">
+          <SectionCard padded={false} class="overflow-hidden">
+            <!-- Calendar Header (domain-specific colored strip) -->
+            <div class="bg-primary flex flex-row items-center justify-between space-y-0 p-4">
+              <div class="flex items-center gap-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onclick={previousMonth}
+                  class="hover:bg-primary-foreground/10 text-primary-foreground h-9 w-9"
+                >
+                  <ChevronLeft class="h-5 w-5" />
+                </Button>
+                <h2 class="text-primary-foreground text-xl font-semibold">
+                  {monthNames[calendarMonth]}
+                  {calendarYear}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onclick={nextMonth}
+                  class="hover:bg-primary-foreground/10 text-primary-foreground h-9 w-9"
+                >
+                  <ChevronRight class="h-5 w-5" />
+                </Button>
+              </div>
               <Button
-                variant="ghost"
-                size="icon"
-                onclick={previousMonth}
-                class="hover:bg-primary-foreground/10 text-primary-foreground h-9 w-9"
+                variant="secondary"
+                size="sm"
+                onclick={goToToday}
+                class="text-primary-foreground bg-primary-foreground/10 hover:bg-primary-foreground/20"
               >
-                <ChevronLeft class="h-5 w-5" />
-              </Button>
-              <h2 class="text-primary-foreground text-xl font-semibold">
-                {monthNames[calendarMonth]}
-                {calendarYear}
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onclick={nextMonth}
-                class="hover:bg-primary-foreground/10 text-primary-foreground h-9 w-9"
-              >
-                <ChevronRight class="h-5 w-5" />
+                Today
               </Button>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onclick={goToToday}
-              class="text-primary-foreground bg-primary-foreground/10 hover:bg-primary-foreground/20"
-            >
-              Today
-            </Button>
-          </div>
             <!-- Days of Week -->
             <div class="bg-muted/50 grid grid-cols-7 border-b">
               {#each ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as day}
@@ -1408,26 +1406,28 @@
                 {/if}
               {/each}
             </div>
-        </SectionCard>
-      </div>
+          </SectionCard>
+        </div>
 
-      <!-- Tasks for Selected Date -->
-      <div class="lg:col-span-1">
-        <SectionCard class="h-fit">
-          {#snippet title()}
-            <div class="flex min-w-0 flex-col gap-0.5">
-              <h3 class="truncate text-[16px] font-medium leading-[1.3] text-[color:var(--text-primary)]">
-                Tasks for {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </h3>
-              <p class="text-[12px] text-[color:var(--text-muted)]">
-                {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          {/snippet}
+        <!-- Tasks for Selected Date -->
+        <div class="lg:col-span-1">
+          <SectionCard class="h-fit">
+            {#snippet title()}
+              <div class="flex min-w-0 flex-col gap-0.5">
+                <h3
+                  class="truncate text-[16px] font-medium leading-[1.3] text-[color:var(--text-primary)]"
+                >
+                  Tasks for {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </h3>
+                <p class="text-[12px] text-[color:var(--text-muted)]">
+                  {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            {/snippet}
             {#if selectedTasks.length > 0}
               <div class="space-y-3">
                 {#each selectedTasks as task}
@@ -1487,34 +1487,34 @@
                 </Button>
               </div>
             {/if}
-        </SectionCard>
+          </SectionCard>
 
-        <!-- Monthly Stats -->
-        <SectionCard title="This Month" class="mt-4">
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground text-sm">Total Tasks</span>
-              <span class="text-foreground font-medium">{totalMonthlyTasks}</span>
+          <!-- Monthly Stats -->
+          <SectionCard title="This Month" class="mt-4">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-muted-foreground text-sm">Total Tasks</span>
+                <span class="text-foreground font-medium">{totalMonthlyTasks}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-muted-foreground text-sm">Days with Tasks</span>
+                <span class="text-foreground font-medium">{monthlyTaskDates.length}</span>
+              </div>
             </div>
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground text-sm">Days with Tasks</span>
-              <span class="text-foreground font-medium">{monthlyTaskDates.length}</span>
-            </div>
-          </div>
-        </SectionCard>
+          </SectionCard>
+        </div>
       </div>
-    </div>
-  {/if}
+    {/if}
 
-  <!-- Pagination -->
-  <Pagination
-    page={pagination.page}
-    limit={pagination.limit}
-    total={pagination.total}
-    onPageChange={handlePageChange}
-    onLimitChange={handleLimitChange}
-  />
-</div>
+    <!-- Pagination -->
+    <Pagination
+      page={pagination.page}
+      limit={pagination.limit}
+      total={pagination.total}
+      onPageChange={handlePageChange}
+      onLimitChange={handleLimitChange}
+    />
+  </div>
 </div>
 
 <!-- Task Detail Drawer -->

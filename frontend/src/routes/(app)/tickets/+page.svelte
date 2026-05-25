@@ -28,13 +28,12 @@
   import { CrmTable } from '$lib/components/ui/crm-table';
   import { CrmDrawer } from '$lib/components/ui/crm-drawer';
   import { BulkActionBar } from '$lib/components/ui/bulk-action-bar';
-  import { TicketStatusChips, TicketListActions, TicketImportDrawer } from '$lib/components/tickets';
   import {
-    SearchInput,
-    SelectFilter,
-    DateRangeFilter,
-    TagFilter
-  } from '$lib/components/ui/filter';
+    TicketStatusChips,
+    TicketListActions,
+    TicketImportDrawer
+  } from '$lib/components/tickets';
+  import { SearchInput, SelectFilter, DateRangeFilter, TagFilter } from '$lib/components/ui/filter';
   import { Pagination } from '$lib/components/ui/pagination';
   import {
     ticketStatusOptions,
@@ -685,11 +684,19 @@
    * @param {string} ticketId
    * @param {string} targetColumnId
    * @param {string} _columnId
+   * @param {string | null} aboveTicketId
+   * @param {string | null} belowTicketId
    */
-  async function handleKanbanStatusChange(ticketId, targetColumnId, _columnId) {
+  async function handleKanbanStatusChange(
+    ticketId,
+    targetColumnId,
+    _columnId,
+    aboveTicketId,
+    belowTicketId
+  ) {
     kanbanFormState.ticketId = ticketId;
-    kanbanFormState.aboveTicketId = '';
-    kanbanFormState.belowTicketId = '';
+    kanbanFormState.aboveTicketId = aboveTicketId || '';
+    kanbanFormState.belowTicketId = belowTicketId || '';
 
     // Determine mode from kanban data
     // In status-based mode, column.id is a status value (e.g., "New", "Assigned")
@@ -720,173 +727,170 @@
 </svelte:head>
 
 <div class="flex flex-col">
-<PageHeader title="Tickets" subtitle="{filteredTickets.length} of {ticketsData.length} tickets">
-  {#snippet actions()}
-    <div class="flex items-center gap-2">
-      <TicketStatusChips
-        value={statusChipFilter}
-        total={ticketsData.length}
-        {openCount}
-        {closedCount}
-        onChange={(v) => (statusChipFilter = v)}
-      />
-      <Button
-        variant={data.watchingOnly ? 'default' : 'outline'}
-        size="sm"
-        class="gap-1.5"
-        onclick={() => {
-          const url = new URL($page.url);
-          if (data.watchingOnly) url.searchParams.delete('watching');
-          else url.searchParams.set('watching', 'true');
-          url.searchParams.delete('page');
-          goto(url.pathname + (url.search ? url.search : ''));
-        }}
-        title={data.watchingOnly
-          ? 'Show all tickets'
-          : 'Show only tickets you are watching'}
-      >
-        <Eye class="h-3.5 w-3.5" />
-        Watching
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        class="gap-1.5"
-        onclick={() => goto('/tickets/analytics')}
-        title="Open the analytics dashboard"
-      >
-        <BarChart3 class="h-3.5 w-3.5" />
-        Analytics
-      </Button>
-      <div class="bg-border mx-1 h-6 w-px"></div>
-      <TicketListActions
-        {viewMode}
-        filtersExpanded={false}
-        {activeFiltersCount}
-        {columns}
-        visibleCount={columnCounts.visible}
-        totalCount={columnCounts.total}
-        {isColumnVisible}
-        onViewMode={updateViewMode}
-        onToggleFilters={() => {}}
-        onToggleColumn={toggleColumn}
-        onCreate={drawer.openCreate}
-        onImport={() => (importOpen = true)}
-      />
-    </div>
-  {/snippet}
-  {#snippet tabs()}
-    <ViewTabs views={[{ id: 'all', label: 'All', count: pagination.total }]} active="all" />
-  {/snippet}
-</PageHeader>
-
-<div class="flex-1">
-  <FilterStrip>
-    <SearchInput
-      value={filters.search}
-      onchange={(value) => updateFilters({ ...filters, search: value })}
-      placeholder="Search tickets..."
-    />
-    <SelectFilter
-      label="Priority"
-      options={priorityFilterOptions}
-      value={filters.priority}
-      onchange={(value) => updateFilters({ ...filters, priority: value })}
-    />
-    <SelectFilter
-      label="Type"
-      options={typeFilterOptions}
-      value={filters.case_type}
-      onchange={(value) => updateFilters({ ...filters, case_type: value })}
-    />
-    <DateRangeFilter
-      label="Created"
-      startDate={filters.created_at_gte}
-      endDate={filters.created_at_lte}
-      onchange={(start, end) =>
-        updateFilters({ ...filters, created_at_gte: start, created_at_lte: end })}
-    />
-    <TagFilter
-      tags={allTags}
-      value={filters.tags}
-      onchange={(ids) => updateFilters({ ...filters, tags: ids })}
-    />
-    {#if activeFiltersCount > 0}
-      <FilterPill label="Clear all" dashed onclick={clearFilters} />
-    {/if}
-    {#snippet meta()}
-      <span>{filteredTickets.length} of {pagination.total} tickets</span>
+  <PageHeader title="Tickets" subtitle="{filteredTickets.length} of {ticketsData.length} tickets">
+    {#snippet actions()}
+      <div class="flex items-center gap-2">
+        <TicketStatusChips
+          value={statusChipFilter}
+          total={ticketsData.length}
+          {openCount}
+          {closedCount}
+          onChange={(v) => (statusChipFilter = v)}
+        />
+        <Button
+          variant={data.watchingOnly ? 'default' : 'outline'}
+          size="sm"
+          class="gap-1.5"
+          onclick={() => {
+            const url = new URL($page.url);
+            if (data.watchingOnly) url.searchParams.delete('watching');
+            else url.searchParams.set('watching', 'true');
+            url.searchParams.delete('page');
+            goto(url.pathname + (url.search ? url.search : ''));
+          }}
+          title={data.watchingOnly ? 'Show all tickets' : 'Show only tickets you are watching'}
+        >
+          <Eye class="h-3.5 w-3.5" />
+          Watching
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          class="gap-1.5"
+          onclick={() => goto('/tickets/analytics')}
+          title="Open the analytics dashboard"
+        >
+          <BarChart3 class="h-3.5 w-3.5" />
+          Analytics
+        </Button>
+        <div class="bg-border mx-1 h-6 w-px"></div>
+        <TicketListActions
+          {viewMode}
+          filtersExpanded={false}
+          {activeFiltersCount}
+          {columns}
+          visibleCount={columnCounts.visible}
+          totalCount={columnCounts.total}
+          {isColumnVisible}
+          onViewMode={updateViewMode}
+          onToggleFilters={() => {}}
+          onToggleColumn={toggleColumn}
+          onCreate={drawer.openCreate}
+          onImport={() => (importOpen = true)}
+        />
+      </div>
     {/snippet}
-  </FilterStrip>
+    {#snippet tabs()}
+      <ViewTabs views={[{ id: 'all', label: 'All', count: pagination.total }]} active="all" />
+    {/snippet}
+  </PageHeader>
 
-  {#if viewMode === 'list'}
-    <CrmTable
-      data={filteredTickets}
-      {columns}
-      bind:visibleColumns
-      bind:selectedIds
-      bind:activeRowId
-      selectable={true}
-      onRowChange={handleRowChange}
-      onRowClick={(row) => goto(`/tickets/${row.id}`)}
-    >
-      {#snippet cellSuffix(row, column)}
-        {#if column.key === 'subject' && row.escalationCount > 0}
-          <span
-            class="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-            title={row.lastEscalationFiredAt
-              ? `Escalated ${row.escalationCount}× — last ${new Date(row.lastEscalationFiredAt).toLocaleString()}`
-              : `Escalated ${row.escalationCount}×`}
-          >
-            <AlertTriangle class="h-3 w-3" />
-            Escalated
-          </span>
-        {/if}
-        {#if column.key === 'subject' && (row.isProblem || row.childCount > 0)}
-          <span
-            class="ml-2 inline-flex items-center gap-1 rounded-full bg-purple-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
-            title={row.isProblem
-              ? `Problem ticket · ${row.childCount} linked child${row.childCount === 1 ? '' : 'ren'}`
-              : `${row.childCount} linked child${row.childCount === 1 ? '' : 'ren'}`}
-          >
-            <Network class="h-3 w-3" />
-            {row.isProblem ? 'Problem' : 'Tree'}
-          </span>
-        {/if}
+  <div class="flex-1">
+    <FilterStrip>
+      <SearchInput
+        value={filters.search}
+        onchange={(value) => updateFilters({ ...filters, search: value })}
+        placeholder="Search tickets..."
+      />
+      <SelectFilter
+        label="Priority"
+        options={priorityFilterOptions}
+        value={filters.priority}
+        onchange={(value) => updateFilters({ ...filters, priority: value })}
+      />
+      <SelectFilter
+        label="Type"
+        options={typeFilterOptions}
+        value={filters.case_type}
+        onchange={(value) => updateFilters({ ...filters, case_type: value })}
+      />
+      <DateRangeFilter
+        label="Created"
+        startDate={filters.created_at_gte}
+        endDate={filters.created_at_lte}
+        onchange={(start, end) =>
+          updateFilters({ ...filters, created_at_gte: start, created_at_lte: end })}
+      />
+      <TagFilter
+        tags={allTags}
+        value={filters.tags}
+        onchange={(ids) => updateFilters({ ...filters, tags: ids })}
+      />
+      {#if activeFiltersCount > 0}
+        <FilterPill label="Clear all" dashed onclick={clearFilters} />
+      {/if}
+      {#snippet meta()}
+        <span>{filteredTickets.length} of {pagination.total} tickets</span>
       {/snippet}
-      {#snippet emptyState()}
-        <div class="flex flex-col items-center justify-center py-16 text-center">
-          <div
-            class="mb-4 flex size-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-sunken)]"
-          >
-            <Briefcase class="size-8 text-[var(--text-tertiary)]" />
+    </FilterStrip>
+
+    {#if viewMode === 'list'}
+      <CrmTable
+        data={filteredTickets}
+        {columns}
+        bind:visibleColumns
+        bind:selectedIds
+        bind:activeRowId
+        selectable={true}
+        onRowChange={handleRowChange}
+        onRowClick={(row) => goto(`/tickets/${row.id}`)}
+      >
+        {#snippet cellSuffix(row, column)}
+          {#if column.key === 'subject' && row.escalationCount > 0}
+            <span
+              class="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+              title={row.lastEscalationFiredAt
+                ? `Escalated ${row.escalationCount}× — last ${new Date(row.lastEscalationFiredAt).toLocaleString()}`
+                : `Escalated ${row.escalationCount}×`}
+            >
+              <AlertTriangle class="h-3 w-3" />
+              Escalated
+            </span>
+          {/if}
+          {#if column.key === 'subject' && (row.isProblem || row.childCount > 0)}
+            <span
+              class="ml-2 inline-flex items-center gap-1 rounded-full bg-purple-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+              title={row.isProblem
+                ? `Problem ticket · ${row.childCount} linked child${row.childCount === 1 ? '' : 'ren'}`
+                : `${row.childCount} linked child${row.childCount === 1 ? '' : 'ren'}`}
+            >
+              <Network class="h-3 w-3" />
+              {row.isProblem ? 'Problem' : 'Tree'}
+            </span>
+          {/if}
+        {/snippet}
+        {#snippet emptyState()}
+          <div class="flex flex-col items-center justify-center py-16 text-center">
+            <div
+              class="mb-4 flex size-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-sunken)]"
+            >
+              <Briefcase class="size-8 text-[var(--text-tertiary)]" />
+            </div>
+            <h3 class="text-lg font-medium text-[var(--text-primary)]">No tickets found</h3>
+            <p class="mt-1 text-sm text-[var(--text-secondary)]">
+              Try adjusting your filters or create a new ticket
+            </p>
           </div>
-          <h3 class="text-lg font-medium text-[var(--text-primary)]">No tickets found</h3>
-          <p class="mt-1 text-sm text-[var(--text-secondary)]">
-            Try adjusting your filters or create a new ticket
-          </p>
-        </div>
-      {/snippet}
-    </CrmTable>
+        {/snippet}
+      </CrmTable>
 
-    <!-- Pagination (only for list view) -->
-    <Pagination
-      page={pagination.page}
-      limit={pagination.limit}
-      total={pagination.total}
-      onPageChange={handlePageChange}
-      onLimitChange={handleLimitChange}
-    />
-  {:else}
-    <TicketKanban
-      data={kanbanData}
-      loading={!kanbanData}
-      onStatusChange={handleKanbanStatusChange}
-      onCardClick={handleKanbanCardClick}
-    />
-  {/if}
-</div>
-
+      <!-- Pagination (only for list view) -->
+      <Pagination
+        page={pagination.page}
+        limit={pagination.limit}
+        total={pagination.total}
+        onPageChange={handlePageChange}
+        onLimitChange={handleLimitChange}
+      />
+    {:else}
+      <TicketKanban
+        data={kanbanData}
+        loading={!kanbanData}
+        onStatusChange={handleKanbanStatusChange}
+        onCardClick={handleKanbanCardClick}
+      />
+    {/if}
+  </div>
 </div>
 
 <BulkActionBar

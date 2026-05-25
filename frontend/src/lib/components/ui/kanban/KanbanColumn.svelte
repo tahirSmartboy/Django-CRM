@@ -18,10 +18,11 @@
    *   column: Column,
    *   itemName?: string,
    *   isDragOver: boolean,
+   *   draggedItemId?: string | null,
    *   CardComponent?: any,
    *   onDragOver: (e: DragEvent) => void,
    *   onDragLeave: () => void,
-   *   onDrop: (e: DragEvent) => void,
+   *   onDrop: (e: DragEvent, neighbors: { aboveId: string | null, belowId: string | null }) => void,
    *   onCardClick: (item: any) => void,
    *   onCardDragStart: (e: DragEvent, item: any) => void,
    *   onCardDragEnd: () => void,
@@ -32,6 +33,7 @@
     column,
     itemName = 'item',
     isDragOver,
+    draggedItemId = null,
     CardComponent = null,
     onDragOver,
     onDragLeave,
@@ -41,6 +43,61 @@
     onCardDragEnd,
     onAddItem
   } = $props();
+
+  /** @type {HTMLDivElement | undefined} */
+  let cardsEl;
+  // Render-index where the dragged card would insert. null = unknown / column empty.
+  let dropRenderIdx = $state(/** @type {number | null} */ (null));
+
+  /** @param {number} clientY */
+  function computeDropRenderIdx(clientY) {
+    if (!cardsEl) return 0;
+    const els = /** @type {HTMLElement[]} */ (
+      Array.from(cardsEl.querySelectorAll('[data-card-id]'))
+    );
+    if (els.length === 0) return 0;
+    for (let i = 0; i < els.length; i++) {
+      const rect = els[i].getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid) return i;
+    }
+    return els.length;
+  }
+
+  const draggedIdxInColumn = $derived(
+    draggedItemId ? column.items.findIndex((it) => it.id === draggedItemId) : -1
+  );
+
+  /** @param {number} renderIdx */
+  function showIndicatorAt(renderIdx) {
+    if (!isDragOver || dropRenderIdx !== renderIdx) return false;
+    if (draggedIdxInColumn !== -1) {
+      // No-op slots: current position or immediately below the dragged card
+      if (renderIdx === draggedIdxInColumn || renderIdx === draggedIdxInColumn + 1) return false;
+    }
+    return true;
+  }
+
+  /** @param {number} renderIdx */
+  function resolveNeighbors(renderIdx) {
+    /** @type {string | null} */
+    let aboveId = null;
+    /** @type {string | null} */
+    let belowId = null;
+    for (let i = renderIdx - 1; i >= 0; i--) {
+      if (column.items[i].id !== draggedItemId) {
+        aboveId = column.items[i].id;
+        break;
+      }
+    }
+    for (let i = renderIdx; i < column.items.length; i++) {
+      if (column.items[i].id !== draggedItemId) {
+        belowId = column.items[i].id;
+        break;
+      }
+    }
+    return { aboveId, belowId };
+  }
 
   // WIP limit check
   const isAtWipLimit = $derived(
@@ -73,7 +130,20 @@
   function handleDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    dropRenderIdx = computeDropRenderIdx(e.clientY);
     onDragOver(e);
+  }
+
+  function handleColumnDragLeave() {
+    dropRenderIdx = null;
+    onDragLeave();
+  }
+
+  /** @param {DragEvent} e */
+  function handleColumnDrop(e) {
+    const idx = computeDropRenderIdx(e.clientY);
+    dropRenderIdx = null;
+    onDrop(e, resolveNeighbors(idx));
   }
 </script>
 
@@ -82,8 +152,8 @@
   class:kanban-drag-over={isDragOver}
   class:wip-exceeded={isAtWipLimit}
   ondragover={handleDragOver}
-  ondragleave={onDragLeave}
-  ondrop={onDrop}
+  ondragleave={handleColumnDragLeave}
+  ondrop={handleColumnDrop}
   role="region"
   aria-label="{column.name} column with {itemCount} {itemCount !== 1 ? 'items' : itemName}"
 >
@@ -124,32 +194,40 @@
   </div>
 
   <!-- Cards -->
-  <div class="kanban-cards min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-1">
-    {#each column.items as item (item.id)}
-      {#if CardComponent}
-        <CardComponent
-          {item}
-          onclick={() => onCardClick(item)}
-          ondragstart={(e) => onCardDragStart(e, item)}
-          ondragend={onCardDragEnd}
-        />
-      {:else}
-        <div
-          class="cursor-pointer rounded-lg border border-black/[0.04] bg-white p-2.5 text-sm shadow-[0_1px_0_rgba(9,30,66,0.12)] hover:border-black/10 dark:border-white/[0.06] dark:bg-white/[0.05]"
-          draggable="true"
-          onclick={() => onCardClick(item)}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onCardClick(item)}
-          ondragstart={(e) => onCardDragStart(e, item)}
-          ondragend={onCardDragEnd}
-          role="button"
-          tabindex="0"
-        >
-          <div class="font-medium text-gray-900 dark:text-gray-100">
-            {item.title || item.name || 'Untitled'}
-          </div>
-        </div>
+  <div bind:this={cardsEl} class="kanban-cards min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-1">
+    {#each column.items as item, i (item.id)}
+      {#if showIndicatorAt(i)}
+        <div class="drop-indicator" aria-hidden="true"></div>
       {/if}
+      <div data-card-id={item.id}>
+        {#if CardComponent}
+          <CardComponent
+            {item}
+            onclick={() => onCardClick(item)}
+            ondragstart={(e) => onCardDragStart(e, item)}
+            ondragend={onCardDragEnd}
+          />
+        {:else}
+          <div
+            class="cursor-pointer rounded-lg border border-black/[0.04] bg-white p-2.5 text-sm shadow-[0_1px_0_rgba(9,30,66,0.12)] hover:border-black/10 dark:border-white/[0.06] dark:bg-white/[0.05]"
+            draggable="true"
+            onclick={() => onCardClick(item)}
+            onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onCardClick(item)}
+            ondragstart={(e) => onCardDragStart(e, item)}
+            ondragend={onCardDragEnd}
+            role="button"
+            tabindex="0"
+          >
+            <div class="font-medium text-gray-900 dark:text-gray-100">
+              {item.title || item.name || 'Untitled'}
+            </div>
+          </div>
+        {/if}
+      </div>
     {/each}
+    {#if showIndicatorAt(column.items.length)}
+      <div class="drop-indicator" aria-hidden="true"></div>
+    {/if}
   </div>
 
   <!-- Footer: Add a card -->
@@ -178,6 +256,13 @@
   }
   .kanban-column.wip-exceeded {
     box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.4);
+  }
+
+  .drop-indicator {
+    height: 3px;
+    border-radius: 2px;
+    background: rgb(34 211 238);
+    margin: 2px 0;
   }
 
   .kanban-cards::-webkit-scrollbar {

@@ -27,7 +27,7 @@
    * @type {{
    *   data: KanbanData | null,
    *   loading?: boolean,
-   *   onStatusChange: (ticketId: string, newStatus: string, columnId: string) => Promise<void>,
+   *   onStatusChange: (ticketId: string, newStatus: string, columnId: string, aboveId: string | null, belowId: string | null) => Promise<void>,
    *   onCardClick: (ticketItem: any) => void
    * }}
    */

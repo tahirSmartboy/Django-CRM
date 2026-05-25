@@ -656,6 +656,8 @@ export const actions = {
       const statusRaw =
         form.get('status')?.toString().trim().toLowerCase().replace(/_/g, ' ') || '';
       const status = validStatuses.includes(statusRaw) ? statusRaw : null;
+      const aboveLeadId = form.get('aboveLeadId')?.toString() || null;
+      const belowLeadId = form.get('belowLeadId')?.toString() || null;
 
       if (!leadId) {
         return fail(400, { error: 'Lead ID is required.' });
@@ -665,11 +667,16 @@ export const actions = {
         return fail(400, { error: 'Valid status is required.' });
       }
 
+      /** @type {Record<string, string>} */
+      const moveData = { status };
+      if (aboveLeadId) moveData.above_lead_id = aboveLeadId;
+      if (belowLeadId) moveData.below_lead_id = belowLeadId;
+
       await apiRequest(
         `/leads/${leadId}/move/`,
         {
           method: 'PATCH',
-          body: { status }
+          body: moveData
         },
         { cookies, org: locals.org }
       );
