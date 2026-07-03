@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo "Syncing Python dependencies..."
+uv sync --frozen --no-install-project
+
 echo "Waiting for PostgreSQL..."
 retries=0
 max_retries=30

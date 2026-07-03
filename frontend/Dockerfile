@@ -1,13 +1,15 @@
 FROM node:22-slim
 
-# Enable pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin pnpm to a known-good, tested version instead of "latest"
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 WORKDIR /app
 
-# Install dependencies (layer cached)
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile || pnpm install
+ENV CI=true
+
+# Install dependencies (layer cached) — pnpm-workspace.yaml must be present for allowBuilds to load
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 EXPOSE 5173
 
